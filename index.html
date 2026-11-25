@@ -210,6 +210,7 @@
   .mbtns button{border:1px solid var(--border);background:#fff;border-radius:20px;padding:4px 10px;font-size:12px;color:var(--violet);font-weight:500}
   .sect{margin-top:20px}
   .sect h3{font-size:16px;margin-bottom:10px}
+  .autosv{font-size:12px;color:var(--muted,#8a8090);margin-left:8px;font-weight:400}.autosv.ok{color:#2E7D4F}
   .info{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 28px}
   .info label{display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--soft-2);font-size:13.5px}
   .info label>span{color:var(--muted)}
@@ -1544,9 +1545,10 @@ function listBody(L){
 
 /* ===== FICHA DE TAREA (como Zoho) ===== */
 function openTask(id){openId=id;tab='comentarios';renderSheet()}
-function closeSheet(){openId=null;const s=document.getElementById('sheet');if(s)s.remove();const b=document.getElementById('sheetBg');if(b)b.remove();go(view)}
+function closeSheet(){clearTimeout(dsvT);if(flushDesc())save();openId=null;const s=document.getElementById('sheet');if(s)s.remove();const b=document.getElementById('sheetBg');if(b)b.remove();go(view)}
 function mentionize(s){return esc(s).replace(/@([A-Za-zÁÉÍÓÚáéíóúñÑ]+( Cruz)?)/g,'<span class="mention">@$1</span>')}
 function renderSheet(){
+  flushDesc();
   const t=S.tasks.find(x=>x.id===openId);if(!t){openId=null;return}
   const ed=canEdit(t),late=isLate(t),st=ST[t.status],real=live(t),diff=t.plan-real,prev=Math.max(t.plan,real);
   const logs=S.logs.filter(l=>l.task===t.id).sort((a,b)=>(b.date+b.from).localeCompare(a.date+a.from));
@@ -1556,7 +1558,7 @@ function renderSheet(){
     tp=(t.comments.length?t.comments.map(c=>'<div class="comment"><span class="av">'+ini(P(c.by).corto)+'</span><div><div class="who">'+esc(P(c.by).nombre)+'</div>'+(c.cc&&c.cc.filter(x=>x!=='rocio').length?'<div class="cc">cc: '+c.cc.filter(x=>x!=='rocio').map(id=>esc(P(id).corto)).join(', ')+'</div>':'')+'<p>'+mentionize(c.text)+'</p><div class="when">'+esc(c.d.split(' ')[0]?dmy(c.d.split(' ')[0])+' '+(c.d.split(' ')[1]||''):'')+'</div></div></div>').join(''):'')+
       '<div class="cform"><div class="mbtns">'+C(t).equipo.filter(id=>id!==me.id).map(P).map(p=>'<button data-mention="'+esc(p.corto)+'">@'+esc(p.corto)+'</button>').join('')+'</div><textarea class="field" id="ctext" placeholder="Escribí un comentario. Mencioná a alguien con @."></textarea><div class="ccrow">'+'<button class="btn prim" data-comment>Comentar</button></div></div>';
   }else if(tab==='horas'){
-    tp='<div class="tbl"><table><thead><tr><th>Fecha</th><th>Usuario</th><th class="num">Horas</th><th class="num">Período</th><th>Origen</th><th>Estado</th></tr></thead><tbody>'+(logs.length?logs.map(l=>'<tr><td>'+dmy(l.date)+'</td><td>'+esc(P(l.user).corto)+'</td><td class="num">'+hm(l.secs)+'</td><td class="num">'+esc(l.from)+' - '+esc(l.to)+'</td><td>'+srcChip(l)+'</td><td>'+estChip(l)+'</td></tr>').join(''):'<tr><td colspan="6">Sin registros todavía.</td></tr>')+'</tbody></table></div>'+
+    tp='<div class="tbl"><table><thead><tr><th>Fecha</th><th>Usuario</th><th class="num">Horas</th><th class="num">Período</th><th>Origen</th><th>Estado</th><th></th></tr></thead><tbody>'+(logs.length?logs.map(l=>'<tr><td>'+dmy(l.date)+'</td><td>'+esc(P(l.user).corto)+'</td><td class="num">'+hm(l.secs)+'</td><td class="num">'+esc(l.from)+' - '+esc(l.to)+'</td><td>'+srcChip(l)+'</td><td>'+estChip(l)+'</td><td class="num">'+(canLog(l)?'<button class="linkbtn" data-lgedit="'+l.id+'">Corregir</button>':'')+'</td></tr>').join(''):'<tr><td colspan="7">Sin registros todavía.</td></tr>')+'</tbody></table></div>'+
       (ed?'<div class="cform"><div class="two"><input class="field" type="date" id="lgd" value="'+TODAY+'" aria-label="Fecha"><div class="two"><input class="field" type="time" id="lgf" value="09:00" aria-label="Desde"><input class="field" type="time" id="lgt" value="10:00" aria-label="Hasta"></div></div><div><button class="btn sec" data-addlog>+ Agregar registro de tiempo</button></div></div>':'');
   }else if(tab==='documentos'){
     const D=t.docs||[];
@@ -1579,7 +1581,7 @@ function renderSheet(){
     '<div class="msg" id="smsg" role="alert"></div>'+
     (t.block?'<div class="banner red"><b>Trabada:</b> '+esc(t.block.motivo)+(t.block.propuesta?' · Propone tenerla el '+dmy(t.block.propuesta):'')+'</div>':'')+
     (toCommunity(t)?'<div class="banner amber">Se publica '+(t.pubFin?'':'el ')+pubTxt(t)+' y todavía no está lista. Diseño entrega 3 días antes.</div>':'')+
-    '<div class="sect"><h3>Descripción de la tarea</h3>'+(ed?rte('ddesc',t.desc,'Indicaciones, links al brief, lo que haga falta.'):'<div class="rtv">'+(rich(t.desc)||'Sin descripción.')+'</div>')+'</div>'+
+    '<div class="sect"><h3>Descripción de la tarea'+(ed?' <span class="autosv" id="dsv">Se guarda solo</span>':'')+'</h3>'+(ed?rte('ddesc',t.desc,'Indicaciones, links al brief, lo que haga falta.'):'<div class="rtv">'+(rich(t.desc)||'Sin descripción.')+'</div>')+'</div>'+
     '<div class="sect entreg'+(t.link?' ok':'')+'"><div class="enth">'+ico('ok')+'<h3>Entregable final</h3></div><div class="elrow"><input class="field" id="dlink" placeholder="Pegá el link de Drive" value="'+esc(t.link)+'"'+(ed?'':' readonly')+'>'+(ed?'<button class="btn sec" data-savelink>Guardar</button>':'')+(t.link&&/^https?:/i.test(t.link)?'<a class="btn sec" href="'+esc(t.link)+'" target="_blank" rel="noopener">Abrir</a>':'')+'</div><p class="note">Sin entregable no se puede cerrar la tarea.</p></div>'+
     '<details class="sect infod"'+(infoOpen?' open':'')+'><summary><h3>Información de la tarea</h3><svg class="i chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary><div class="info">'+
       '<label><span>Responsable</span>'+ro(esc(P(t.assignee).nombre))+'</label>'+(t.maker&&t.maker!==t.assignee?'<label><span>La hizo</span>'+ro(esc(P(t.maker).nombre))+'</label>':'')+
@@ -1933,6 +1935,17 @@ const PIN=id=>'<span class="pin"'+' id="'+id+'"'+' aria-hidden="true"><svg viewB
 /* ===== modales ===== */
 /* eliminar: Rocío y Candela cualquier tarea; cada uno, las que creó */
 const canDelete=t=>!!me&&(gestor()||t.by===me.id);
+/* descripción: se guarda sola mientras escribís */
+let dsvT=null;
+function flushDesc(){const e=document.getElementById('ddesc');if(!e||!openId)return false;const t=S.tasks.find(x=>x.id===openId);if(!t)return false;const v=clean(e.innerHTML);if(v===(t.desc||''))return false;t.desc=v;return true}
+function descSaved(){const e=document.getElementById('dsv');if(e){e.textContent='Guardado ✓';e.classList.add('ok')}}
+document.addEventListener('input',e=>{if(!e.target.closest||!e.target.closest('#ddesc'))return;const s=document.getElementById('dsv');if(s){s.textContent='Guardando…';s.classList.remove('ok')}clearTimeout(dsvT);dsvT=setTimeout(()=>{if(flushDesc())save();descSaved()},700)});
+document.addEventListener('focusout',e=>{if(e.target&&e.target.id==='ddesc'){clearTimeout(dsvT);if(flushDesc())save();descSaved()}});
+window.addEventListener('beforeunload',()=>{if(flushDesc())save()});
+/* corregir tiempo a mano: cada uno el suyo; Rocío y Candela cualquiera */
+const canLog=l=>!!me&&(gestor()||l.user===me.id);
+const toMin=x=>Number(x.slice(0,2))*60+Number(x.slice(3));
+function editLog(l){modal('<h3>Corregir tiempo</h3><p class="note">Cambiá la fecha o el horario. Queda marcado como cargado a mano'+(admin()?'':' y vuelve a aprobación')+'.</p><div class="two" style="margin-top:14px"><input class="field" type="date" id="eld" value="'+esc(l.date)+'" aria-label="Fecha"><div class="two"><input class="field" type="time" id="elf" value="'+esc(l.from)+'" aria-label="Desde"><input class="field" type="time" id="elt" value="'+esc(l.to)+'" aria-label="Hasta"></div></div><div class="actions"><button class="btn sec" data-lgdel="'+l.id+'" style="margin-right:auto;color:#B42318">Borrar registro</button><button class="btn sec" data-closemodal-btn>Cancelar</button><button class="btn prim" data-lgsave="'+l.id+'">Guardar</button></div>')}
 function askDelete(id){const t=S.tasks.find(x=>x.id===id);if(!t)return;const h=S.logs.filter(l=>l.task===id).reduce((a,l)=>a+l.secs,0);
   modal('<h3>¿Eliminar esta tarea?</h3><p style="margin:6px 0 4px"><b>'+esc(ttl(t))+'</b></p><p class="note" style="margin:0 0 6px">Se borra para todo el equipo, con sus comentarios y documentos.'+(h?' Las horas que ya se cargaron ('+hm(h)+') quedan en las hojas de horas.':'')+'</p><div class="actions"><button class="btn sec" data-closemodal-btn>Cancelar</button><button class="btn danger" data-delok="'+id+'">Eliminar tarea</button></div>')}
 function modal(h){document.getElementById('layer').insertAdjacentHTML('beforeend','<div class="modal-bg" data-closemodal><div class="modal" role="dialog" aria-modal="true">'+h+'</div></div>');const f=document.querySelector('.modal input,.modal select,.modal textarea');if(f)f.focus()}
@@ -2193,6 +2206,16 @@ document.addEventListener('click',e=>{
   if(el=q('[data-client]')){briefKey=null;editSit=false;editInfo=false;meetOpen=null;go('cliente',{client:el.dataset.client});return}
   if(el=q('[data-fotodel]')){delete P(el.dataset.fotodel).foto;S.team=TEAM;save();go(view);return}
   if(el=q('[data-deltask]')){askDelete(Number(el.dataset.deltask));return}
+  if(el=q('[data-lgedit]')){const l=S.logs.find(x=>String(x.id)===el.dataset.lgedit);if(l&&canLog(l))editLog(l);return}
+  if(el=q('[data-lgsave]')){const l=S.logs.find(x=>String(x.id)===el.dataset.lgsave);if(!l||!canLog(l))return;const d=document.getElementById('eld').value,f=document.getElementById('elf').value,to=document.getElementById('elt').value;
+    if(!d||!f||!to||to<=f){toast('Revisá el horario: el fin tiene que ser después del inicio.');return}
+    const secs=(toMin(to)-toMin(f))*60,tk=S.tasks.find(x=>x.id===l.task),before=dmy(l.date)+' '+l.from+'-'+l.to;
+    if(tk)tk.seconds=Math.max(0,(tk.seconds||0)+secs-l.secs);
+    Object.assign(l,{date:d,from:f,to,secs,src:'manual',estado:admin()&&l.user===me.id?'aprobado':'pendiente'});
+    if(tk)hist(tk,'corrigió el tiempo: '+before+' → '+dmy(d)+' '+f+'-'+to,1);closeModal();save();if(openId)renderSheet();toast('Tiempo corregido');return}
+  if(el=q('[data-lgdel]')){const l=S.logs.find(x=>String(x.id)===el.dataset.lgdel);if(!l||!canLog(l))return;const tk=S.tasks.find(x=>x.id===l.task);
+    if(tk){tk.seconds=Math.max(0,(tk.seconds||0)-l.secs);hist(tk,'borró un registro de '+hm(l.secs)+' del '+dmy(l.date),1)}
+    S.logs=S.logs.filter(x=>x!==l);closeModal();save();if(openId)renderSheet();toast('Registro borrado');return}
   if(el=q('[data-delok]')){const id=Number(el.dataset.delok),t=S.tasks.find(x=>x.id===id);if(t&&t.running)stopRun(t);S.tasks=S.tasks.filter(x=>x.id!==id);S.notifs=S.notifs.filter(n=>n.task!==id);closeModal();openId=null;const sh=document.getElementById('sheet');if(sh)sh.remove();const bg=document.getElementById('sheetBg');if(bg)bg.remove();save();go(view);toast('Tarea eliminada');return}
   if(q('[data-backup]')){(async()=>{await push();const out={fecha:new Date().toISOString(),por:me.id};for(const tb of TABLES.concat(['registro'])){const {data}=await sb.from(tb).select('*');out[tb]=data||[]}
     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,1)],{type:'application/json'}));a.download='orbita-copia-'+TODAY+'.json';document.body.appendChild(a);a.click();a.remove();toast('Copia descargada. Guardala en el Drive.')})();return}
@@ -2414,6 +2437,7 @@ async function refresh(){
   if(!me)return;if(pushing){subscribe._t=setTimeout(refresh,600);return}
   const a=document.activeElement;if(a&&a.matches&&a.matches('input,textarea,select,[contenteditable="true"]')&&!a.closest('#loginForm')){a.addEventListener('blur',()=>setTimeout(refresh,80),{once:true});return}
   if(document.querySelector('.modal'))return setTimeout(refresh,1500);
+  if(typeof flushDesc==='function')flushDesc();
   await push();await pull();applyBrand(S);syncTeam();takeSnap();checkN();go(view)}
 async function enterWith(session){
   const email=((session&&session.user&&session.user.email)||'').toLowerCase();
