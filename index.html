@@ -971,6 +971,8 @@
   .av{overflow:hidden}.av img.avimg{width:100%;height:100%;object-fit:cover;display:block;border-radius:50%}
   .av.xl{width:64px;height:64px;font-size:22px;flex:0 0 auto}.fotorow{display:flex;align-items:center;gap:14px;margin:8px 0 4px}
   .gwho{font-weight:500;color:var(--plum)}
+  .sh-acts{display:flex;gap:6px;align-items:center}.x.del svg.i{width:17px;height:17px}.x.del:hover{color:var(--red);background:#fdecee}
+  .btn.danger{background:var(--red);color:#fff;border-color:var(--red)}.btn.danger:hover{filter:brightness(.95)}
   .lmsg{margin:10px 0 0;font-size:13px;color:var(--red);min-height:18px;text-align:center}.lmsg.ok{color:var(--violet)}
   .field.sm{padding:6px 9px;font-size:13px;height:auto}.field.sm.num{width:120px;text-align:right}
   .accadd{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.accadd .field{flex:1 1 140px}.accrow{margin:6px 0}
@@ -1567,7 +1569,7 @@ function renderSheet(){
   const ro=(v)=>'<span class="ro">'+v+'</span>';
   const inp=(id,type,val,extra)=>ed&&type==='date'?dfield(id,val,{min:id==='ddue'?'dini':id==='dpubf'?'dpub':'',range:id==='dpub'||id==='dpubf'?'dpub,dpubf':''}):ed?'<input class="field" type="'+type+'" id="'+id+'" value="'+esc(val)+'"'+(extra||'')+'>':ro(esc(val));
   const dur=t.inicio&&t.due?daysBetween(t.inicio,t.due)+1:0;
-  const html='<div class="sh-in"><div class="sh-top"><span class="idchip"><span class="k">Tarea</span><span class="v">'+code(t)+'</span></span><button class="x" data-closesheet aria-label="Cerrar">×</button></div>'+
+  const html='<div class="sh-in"><div class="sh-top"><span class="idchip"><span class="k">Tarea</span><span class="v">'+code(t)+'</span></span><span class="sh-acts">'+(canDelete(t)?'<button class="x del" data-deltask="'+t.id+'" aria-label="Eliminar tarea" title="Eliminar tarea"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>':'')+'<button class="x" data-closesheet aria-label="Cerrar">×</button></span></div>'+
     '<h2>'+esc(ttl(t))+'</h2><div class="byline"><span>Por <b>'+esc(P(t.by).corto)+'</b></span><span class="sep">|</span><span>'+ico('folder')+' '+esc(t.client)+'</span><span class="sep">|</span><span>'+t.comments.length+(t.comments.length===1?' comentario':' comentarios')+'</span><span class="sep">|</span>'+
       ((ed&&WORK.includes(t.status))?'<button type="button" class="clk'+(t.running?' on':'')+'" data-timer-toggle aria-label="'+(t.running?'Pausar el reloj':'Empezar el reloj')+'">':'<span class="clk ro">')+
       '<svg class="cd" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27"/><line class="hd" x1="32" y1="32" x2="32" y2="14" data-hand="'+t.id+'" style="transform:rotate('+(real%60)*6+'deg)"/><circle cx="32" cy="32" r="3.4" class="hub"/></svg>'+
@@ -1929,6 +1931,10 @@ function splash(u){try{const old=document.getElementById('splash');if(old)old.re
   setTimeout(()=>{el.classList.add('out');setTimeout(()=>el.remove(),450)},reduce?600:1900)}catch(x){}}
 const PIN=id=>'<span class="pin"'+' id="'+id+'"'+' aria-hidden="true"><svg viewBox="3 3.5 34 35"><g class="pt"><g transform="rotate(-16 20 15)"><circle class="sat back" r="1.9"><animateMotion class="satm" dur="5.2s" repeatCount="indefinite" path="M5,15 a15,4.6 0 1,0 30,0 a15,4.6 0 1,0 -30,0"/></circle></g><circle class="pring" cx="20" cy="15" r="8.2"/><g transform="rotate(-16 20 15)"><circle class="sat front" r="2.3"><animateMotion class="satm" dur="5.2s" repeatCount="indefinite" path="M5,15 a15,4.6 0 1,0 30,0 a15,4.6 0 1,0 -30,0"/><animate class="satm" attributeName="opacity" dur="5.2s" repeatCount="indefinite" values="1;1;0;0;1" keyTimes="0;.47;.5;.97;1"/></circle></g></g><circle class="pdrop" cx="20" cy="33.6" r="3.5"/><circle class="pwave" cx="20" cy="33.6" r="3.5"/></svg></span>';
 /* ===== modales ===== */
+/* eliminar: Rocío y Candela cualquier tarea; cada uno, las que creó */
+const canDelete=t=>!!me&&(gestor()||t.by===me.id);
+function askDelete(id){const t=S.tasks.find(x=>x.id===id);if(!t)return;const h=S.logs.filter(l=>l.task===id).reduce((a,l)=>a+l.secs,0);
+  modal('<h3>¿Eliminar esta tarea?</h3><p style="margin:6px 0 4px"><b>'+esc(ttl(t))+'</b></p><p class="note" style="margin:0 0 6px">Se borra para todo el equipo, con sus comentarios y documentos.'+(h?' Las horas que ya se cargaron ('+hm(h)+') quedan en las hojas de horas.':'')+'</p><div class="actions"><button class="btn sec" data-closemodal-btn>Cancelar</button><button class="btn danger" data-delok="'+id+'">Eliminar tarea</button></div>')}
 function modal(h){document.getElementById('layer').insertAdjacentHTML('beforeend','<div class="modal-bg" data-closemodal><div class="modal" role="dialog" aria-modal="true">'+h+'</div></div>');const f=document.querySelector('.modal input,.modal select,.modal textarea');if(f)f.focus()}
 function closeModal(){document.querySelectorAll('.modal-bg').forEach(x=>x.remove())}
 /* ===== EQUIPO Y PERFIL ===== */
@@ -2186,6 +2192,8 @@ document.addEventListener('click',e=>{
   if(el=q('[data-go]')){if(el.dataset.go==='tareas'){kFilt=null}openId=null;const s=document.getElementById('sheet');if(s){s.remove();document.getElementById('sheetBg').remove()}go(el.dataset.go);return}
   if(el=q('[data-client]')){briefKey=null;editSit=false;editInfo=false;meetOpen=null;go('cliente',{client:el.dataset.client});return}
   if(el=q('[data-fotodel]')){delete P(el.dataset.fotodel).foto;S.team=TEAM;save();go(view);return}
+  if(el=q('[data-deltask]')){askDelete(Number(el.dataset.deltask));return}
+  if(el=q('[data-delok]')){const id=Number(el.dataset.delok),t=S.tasks.find(x=>x.id===id);if(t&&t.running)stopRun(t);S.tasks=S.tasks.filter(x=>x.id!==id);S.notifs=S.notifs.filter(n=>n.task!==id);closeModal();openId=null;const sh=document.getElementById('sheet');if(sh)sh.remove();const bg=document.getElementById('sheetBg');if(bg)bg.remove();save();go(view);toast('Tarea eliminada');return}
   if(q('[data-backup]')){(async()=>{await push();const out={fecha:new Date().toISOString(),por:me.id};for(const tb of TABLES.concat(['registro'])){const {data}=await sb.from(tb).select('*');out[tb]=data||[]}
     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,1)],{type:'application/json'}));a.download='orbita-copia-'+TODAY+'.json';document.body.appendChild(a);a.click();a.remove();toast('Copia descargada. Guardala en el Drive.')})();return}
   if(el=q('[data-pwshow]')){const sp=el.previousElementSibling;const on=sp.textContent.startsWith('•');sp.textContent=on?sp.dataset.pw||'(vacía)':'••••••••';el.textContent=on?'Ocultar':'Ver';return}
