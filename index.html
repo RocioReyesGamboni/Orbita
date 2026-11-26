@@ -1413,6 +1413,9 @@ function startRun(t){S.tasks.forEach(x=>{if(x.running&&x.id!==t.id)stopRun(x)});
 /* transiciones del flujo (como el blueprint de Zoho) */
 /* todos pueden completar directo o mandar a aprobación */
 const needsAprob=t=>false;
+/* el link es obligatorio solo en tareas de diseño (lo hace Diseño o el título habla de diseño/piezas) */
+const DISENO_RX=/dise[ñn]|pieza|flyer|placa|banner|logo|render|carrusel|reel|video|edici[oó]n|animaci|mockup|gr[aá]fic/i;
+const needsLink=t=>P(t.assignee).area==='Diseño'||P(t.maker||t.assignee).area==='Diseño'||DISENO_RX.test(t.title||'');
 function transitions(t){
   const L=[],dir=!needsAprob(t);
   if(t.status==='backlog')L.push(['pendiente','Pasar a Pendientes','']);
@@ -1431,7 +1434,7 @@ function move(t,to,owner){
   if(to==='pendiente'&&(!t.assignee||!t.due||!t.inicio))return 'Para pasar a Pendientes necesita responsable, fecha de inicio y de vencimiento.';
   if(to==='enviado'&&t.maker===me.id&&!admin())return 'La aprobación la hace otra persona del equipo, no quien la hizo.';
   if(to==='completado'&&(from==='curso'||from==='ajustes')&&needsAprob(t))return 'Las piezas de diseño pasan por aprobación antes de cerrarse.';
-  if(to==='completado'&&!t.link.trim())return 'Para cerrar la tarea falta el entregable: pegá el link de Drive en Entregable / archivo final.';
+  if(to==='completado'&&needsLink(t)&&!t.link.trim())return 'Para cerrar la tarea falta el entregable: pegá el link de Drive en Entregable / archivo final.';
   if(from==='revision'&&to==='enviado'){t.approvedBy=me.id;notify(t.assignee,me.id,t.id,'aprobada','')}
   if(t.running&&!WORK.includes(to))stopRun(t);
   if(back){t.cambios++;notify(t.assignee,me.id,t.id,from==='enviado'?'ajustes':'cambios','');hist(t,from==='enviado'?'marcó que el cliente pidió ajustes: pasa a Ajustes':'pidió ajustes en la aprobación: pasa a Ajustes')}
@@ -1585,7 +1588,7 @@ function renderSheet(){
     (t.block?'<div class="banner red"><b>Trabada:</b> '+esc(t.block.motivo)+(t.block.propuesta?' · Propone tenerla el '+dmy(t.block.propuesta):'')+'</div>':'')+
     (toCommunity(t)?'<div class="banner amber">Se publica '+(t.pubFin?'':'el ')+pubTxt(t)+' y todavía no está lista. Diseño entrega 3 días antes.</div>':'')+
     '<div class="sect"><h3>Descripción de la tarea'+(ed?' <span class="autosv" id="dsv">Se guarda solo</span>':'')+'</h3>'+(ed?rte('ddesc',t.desc,'Indicaciones, links al brief, lo que haga falta.'):'<div class="rtv">'+(rich(t.desc)||'Sin descripción.')+'</div>')+'</div>'+
-    '<div class="sect entreg'+(t.link?' ok':'')+'"><div class="enth">'+ico('ok')+'<h3>Entregable final</h3></div><div class="elrow"><input class="field" id="dlink" placeholder="Pegá el link de Drive" value="'+esc(t.link)+'"'+(ed?'':' readonly')+'>'+(ed?'<button class="btn sec" data-savelink>Guardar</button>':'')+(t.link&&/^https?:/i.test(t.link)?'<a class="btn sec" href="'+esc(t.link)+'" target="_blank" rel="noopener">Abrir</a>':'')+'</div><p class="note">Sin entregable no se puede cerrar la tarea.</p></div>'+
+    '<div class="sect entreg'+(t.link?' ok':'')+'"><div class="enth">'+ico('ok')+'<h3>Entregable final</h3></div><div class="elrow"><input class="field" id="dlink" placeholder="Pegá el link de Drive" value="'+esc(t.link)+'"'+(ed?'':' readonly')+'>'+(ed?'<button class="btn sec" data-savelink>Guardar</button>':'')+(t.link&&/^https?:/i.test(t.link)?'<a class="btn sec" href="'+esc(t.link)+'" target="_blank" rel="noopener">Abrir</a>':'')+'</div><p class="note">'+(needsLink(t)?'Sin entregable no se puede cerrar la tarea.':'Opcional: si hay un archivo final, pegá el link.')+'</p></div>'+
     '<details class="sect infod"'+(infoOpen?' open':'')+'><summary><h3>Información de la tarea</h3><svg class="i chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary><div class="info">'+
       '<label><span>Responsable</span>'+ro(esc(P(t.assignee).nombre))+'</label>'+(t.maker&&t.maker!==t.assignee?'<label><span>La hizo</span>'+ro(esc(P(t.maker).nombre))+'</label>':'')+
       '<label><span>Estado</span>'+ro(stChip(t))+'</label>'+
@@ -2355,7 +2358,7 @@ function dropTo(t,to){
   if(to===t.status&&!isLate(t))return;
   if(!t.due&&to!=='backlog'){toast('Le falta la fecha. La ponen Rocío, Valentina o Candela.');go(view);return}
   if(to==='enviado'&&t.status==='revision'&&t.maker===me.id&&!admin()){toast('La aprobación la hace otra persona del equipo.');go(view);return}
-  if(to==='completado'&&!t.link.trim()){modal('<h3>Cerrar tarea</h3><p style="color:var(--muted);font-size:13.5px">'+esc(ttl(t))+'</p><label for="qlink">Link o archivo final <span class="req">*</span></label><input class="field" id="qlink" placeholder="https://drive.google.com/..."><div class="msg" id="qmsg"></div><div class="actions"><button class="btn sec" data-closemodal-btn>Cancelar</button><button class="btn prim" data-qclose="'+t.id+'">Cerrar tarea</button></div>');return}
+  if(to==='completado'&&needsLink(t)&&!t.link.trim()){modal('<h3>Cerrar tarea</h3><p style="color:var(--muted);font-size:13.5px">'+esc(ttl(t))+'</p><label for="qlink">Link o archivo final <span class="req">*</span></label><input class="field" id="qlink" placeholder="https://drive.google.com/..."><div class="msg" id="qmsg"></div><div class="actions"><button class="btn sec" data-closemodal-btn>Cancelar</button><button class="btn prim" data-qclose="'+t.id+'">Cerrar tarea</button></div>');return}
   if(ownersFor(t,to)){askOwner(t,to,'drag');return}
   freeMove(t,to);
 }
