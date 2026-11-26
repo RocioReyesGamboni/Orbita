@@ -1411,8 +1411,8 @@ function stopRun(t,endMs,nota){if(!t.running)return;const endT=endMs||Date.now()
   t.seconds+=secs;t.running=false;t.runStart=null;t.lastAct=null}
 function startRun(t){S.tasks.forEach(x=>{if(x.running&&x.id!==t.id)stopRun(x)});t.running=true;t.runStart=Date.now();lastAct=Date.now();t.lastAct=lastAct;save();if(typeof trySysIdle==='function')trySysIdle();if(typeof hdr==='function')hdr()}
 /* transiciones del flujo (como el blueprint de Zoho) */
-/* solo Diseño necesita aprobación; el resto puede completar directo */
-const needsAprob=t=>P(t.maker||t.assignee).area==='Diseño';
+/* todos pueden completar directo o mandar a aprobación */
+const needsAprob=t=>false;
 function transitions(t){
   const L=[],dir=!needsAprob(t);
   if(t.status==='backlog')L.push(['pendiente','Pasar a Pendientes','']);
