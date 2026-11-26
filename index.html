@@ -1502,7 +1502,7 @@ function rInicio(m){
   const bOpen=B.filter(t=>t.status!=='completado'),bClosed=B.filter(t=>t.status==='completado'),ajA=B.filter(t=>t.cambios>0&&t.status!=='completado'),ajC=B.filter(t=>t.cambios>0&&t.status==='completado');
   const pct=B.length?Math.round(bClosed.length/B.length*100):0,onTime=bClosed.filter(t=>!t.closedAt||t.closedAt<=t.due).length;
   const byDue=a=>a.slice().sort((x,y)=>(x.due||'9').localeCompare(y.due||'9'));
-  const late=byDue(open.filter(isLate)),today=open.filter(t=>t.due===TODAY&&!isLate(t)),aj=byDue(open.filter(t=>t.status==='ajustes'&&!isLate(t)&&t.due!==TODAY)),rest=byDue(open.filter(t=>!late.includes(t)&&!today.includes(t)&&!aj.includes(t)));
+  const late=byDue(open.filter(isLate)),today=open.filter(t=>t.due===TODAY&&!isLate(t)),aj=byDue(open.filter(t=>t.status==='ajustes'&&!isLate(t)&&t.due!==TODAY)),rest=byDue(open.filter(t=>!late.includes(t)&&!today.includes(t)&&!aj.includes(t))).concat(S.tasks.filter(t=>mine(t)&&isSched(t)).sort((x,y)=>x.inicio.localeCompare(y.inicio)));
   const first=byDue(open).find(t=>!isLate(t)&&!['revision','enviado'].includes(t.status));
   const k=(n,l,f,cls,sub)=>'<button class="k5 '+cls+'" data-golist="'+f+'"><span class="kl">'+l+'</span><b>'+n+'</b>'+(sub?'<small>'+sub+'</small>':'')+'</button>';
   const box=(title,items,f,empty,fn,cls,drop)=>'<section class="box'+(cls?' '+cls:'')+'"'+(drop?' data-ibox="'+drop+'"':'')+'><header><h3>'+title+'</h3><span class="bc">'+items.length+'</span><button class="linkbtn" data-golist="'+f+'">Ver más</button></header>'+(items.length?'<ul>'+items.map(fn).join('')+'</ul>':'<div class="bempty"><span>'+ico(cls==='b-late'?'check':'tasks')+'</span><p>'+empty+'</p></div>')+'</section>';
@@ -1513,7 +1513,7 @@ function rInicio(m){
    '<div class="boxes">'+
     box('Mis tareas atrasadas',late,'atrasadas','Nada atrasado. Seguí así.',t=>{const n=daysBetween(t.due,TODAY);return wrow(t,'atrasada por '+n+' día'+(n>1?'s':''),'red')},'b-late','late')+
     box('Mis tareas que vencen hoy',today,'abiertas','Hoy no vence nada.',t=>wrow(t,ST[t.status].l,'mut'),'b-today','hoy')+
-    box('Mis tareas',rest,'abiertas','No tenés otras tareas abiertas.',t=>wrow(t,ST[t.status].l,'mut'),'','mis')+
+    box('Mis tareas',rest,'abiertas','No tenés otras tareas abiertas.',t=>wrow(t,isSched(t)?'Empieza el '+fday(t.inicio):ST[t.status].l,'mut'),'','mis')+
     box('Mis ajustes',aj,'ajab','Nadie te pidió ajustes. La primera idea quedó.',t=>wrow(t,(t.cambios>1?t.cambios+'ª ronda':'1ª ronda'),'mut'),'b-aj','aj')+
    '</div>';
 }
@@ -1910,8 +1910,20 @@ function searchRes(){const q=(document.getElementById('sq').value||'').trim().to
    (cs.length&&(q||sc)?'<div class="mlbl2">Proyectos</div><ul class="sl">'+cs.map(n=>'<li><button data-client="'+esc(n)+'"><span class="cdot2" style="background:'+S.clients[n].color+'"></span><span class="nt"><b>'+esc(n)+'</b></span></button></li>').join('')+'</ul>':'')}
 /* inactividad: si nadie mueve el mouse ni el teclado, el reloj se pausa solo */
 ['mousemove','keydown','pointerdown','wheel','touchstart','scroll'].forEach(ev=>window.addEventListener(ev,()=>{lastAct=Date.now()},{passive:true,capture:true}));
-function idleCheck(force){if(!me)return;const r=running();if(!r)return;const gap=Date.now()-lastAct;
-  if(force||gap>=IDLE_MS){const end=Math.max(r.runStart,lastAct);stopRun(r,end,'Se pausó solo por '+Math.round((Date.now()-end)/60000)+' min sin actividad');hist(r,'el reloj se pausó solo: '+Math.max(IDLE_MIN,Math.round((Date.now()-end)/60000))+' min sin movimiento',1);save();hdr();if(pop==='reloj')renderPop();
+/* fuera de Órbita (Meta, Canva, etc.) el reloj sigue: solo se pausa por inactividad mientras Órbita está al frente,
+   o por inactividad de toda la compu si el navegador permite detectarla */
+const away=()=>document.hidden||!document.hasFocus();
+let awaySince=null;
+function onBack(){if(!awaySince)return;const r=running(),since=awaySince;awaySince=null;lastAct=Date.now();
+  if(!r||idleSys||Date.now()-since<45*60000)return;const mins=Math.round((Date.now()-since)/60000);
+  modal('<h3>¿Seguiste trabajando?</h3><p style="color:var(--muted);font-size:14px">Estuviste '+(mins>=60?Math.floor(mins/60)+' h '+(mins%60)+' min':mins+' min')+' fuera de Órbita con el reloj prendido en <b>'+esc(ttl(r))+'</b>. Si seguiste con esta tarea en otra app, queda todo contado.</p><div class="actions"><button class="btn sec" data-awaycut="'+since+'">No, cortar cuando salí</button><button class="btn prim" data-closemodal-btn>Sí, contar todo</button></div>')}
+window.addEventListener('blur',()=>{if(!awaySince)awaySince=Date.now()});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){if(!awaySince)awaySince=Date.now()}else if(document.hasFocus())onBack()});
+window.addEventListener('focus',onBack);
+function idleCheck(force){if(!me)return;const r=running();if(!r)return;
+  if(!force&&away()){lastAct=Date.now();if(Date.now()-(r.lastSave||0)>60000){r.lastAct=lastAct;r.lastSave=Date.now();save()}return}
+  const gap=Date.now()-lastAct;
+  if(force||gap>=IDLE_MS){const end=Math.max(r.runStart,force?Date.now()-IDLE_MS:lastAct);stopRun(r,end,'Se pausó solo por '+Math.round((Date.now()-end)/60000)+' min sin actividad');hist(r,'el reloj se pausó solo: '+Math.max(IDLE_MIN,Math.round((Date.now()-end)/60000))+' min sin movimiento',1);save();hdr();if(pop==='reloj')renderPop();
     modal('<h3>¿Seguís ahí?</h3><p style="color:var(--muted);font-size:14px">No hubo movimiento del mouse ni del teclado durante '+IDLE_MIN+' minutos, así que el reloj de <b>'+esc(ttl(r))+'</b> se pausó a las '+new Date(end).toTimeString().slice(0,5)+'. Ese rato no se cuenta.</p><div class="actions"><button class="btn sec" data-closemodal-btn>Listo</button><button class="btn prim" data-resume="'+r.id+'">Sigo trabajando</button></div>');go(view)}
   else if(Date.now()-(r.lastSave||0)>20000){r.lastAct=lastAct;r.lastSave=Date.now();save()}}
 setInterval(()=>idleCheck(),15000);
@@ -2207,6 +2219,7 @@ document.addEventListener('click',e=>{
   if(el=q('[data-nread]')){const n=(S.notifs||[]).find(x=>String(x.id)===el.dataset.nread);if(n){n.read=true;save();closePop();hdr();if(n.task){openTask(n.task);tab='comentarios';renderSheet()}else if(n.client&&S.clients[n.client])go('cliente',{client:n.client,tab:n.type==='aumento'?'plan':'tareas'})}return}
   if(el=q('[data-start]')){const t=S.tasks.find(x=>x.id===Number(el.dataset.start));if(t.status==='pendiente'){const r=move(t,'curso');if(r!==true){toast(r);return}if(!t.running)startRun(t)}else startRun(t);toast('Reloj andando en '+ttl(t));renderPop();go(view);return}
   if(el=q('[data-pause]')){const t=S.tasks.find(x=>x.id===Number(el.dataset.pause));stopRun(t);save();toast('Pausado. Quedó en tu hoja de horas.');renderPop();go(view);return}
+  if(el=q('[data-awaycut]')){const r=running(),at=Number(el.dataset.awaycut);if(r){stopRun(r,Math.max(r.runStart,at),'Se cortó al salir de Órbita');hist(r,'descontó el rato fuera de Órbita',1);save();hdr();go(view)}closeModal();toast('Listo: se contó hasta que saliste.');return}
   if(q('[data-idletest]')){lastAct=Date.now()-IDLE_MS-60000;const r=running();if(!r){toast('Primero prendé el reloj en una tarea.');return}if(r.runStart>lastAct)r.runStart=lastAct-20*60000;closePop();idleCheck();return}
   if(el=q('[data-resume]')){const t=S.tasks.find(x=>x.id===Number(el.dataset.resume));closeModal();startRun(t);toast('Reloj andando de nuevo');go(view);return}
   if(inPop&&(q('[data-open]')||q('[data-client]')))closePop();
