@@ -1411,23 +1411,26 @@ function stopRun(t,endMs,nota){if(!t.running)return;const endT=endMs||Date.now()
   t.seconds+=secs;t.running=false;t.runStart=null;t.lastAct=null}
 function startRun(t){S.tasks.forEach(x=>{if(x.running&&x.id!==t.id)stopRun(x)});t.running=true;t.runStart=Date.now();lastAct=Date.now();t.lastAct=lastAct;save();if(typeof trySysIdle==='function')trySysIdle();if(typeof hdr==='function')hdr()}
 /* transiciones del flujo (como el blueprint de Zoho) */
+/* solo Diseño necesita aprobación; el resto puede completar directo */
+const needsAprob=t=>P(t.maker||t.assignee).area==='Diseño';
 function transitions(t){
-  const L=[];
+  const L=[],dir=!needsAprob(t);
   if(t.status==='backlog')L.push(['pendiente','Pasar a Pendientes','']);
   if(t.status==='pendiente')L.push(['curso','Empezar','']);
-  if(t.status==='curso')L.push(['revision','Enviar a aprobación',''],['block','Pedir ayuda','warn']);
+  if(t.status==='curso'){if(dir)L.push(['completado','Completar tarea','']);L.push(['revision','Enviar a aprobación',dir?'alt':''],['block','Pedir ayuda','warn'])}
   if(t.status==='revision')L.push(['enviado','Aprobar y enviar al cliente',''],['ajustes','Pedir ajustes','alt']);
-  if(t.status==='ajustes')L.push(['revision','Ajustes listos: a aprobación',''],['block','Pedir ayuda','warn']);
+  if(t.status==='ajustes'){if(dir)L.push(['completado','Ajustes listos: completar','']);L.push(['revision','Ajustes listos: a aprobación',dir?'alt':''],['block','Pedir ayuda','warn'])}
   if(t.status==='enviado')L.push(['completado','Cerrar tarea',''],['ajustes','El cliente pidió ajustes','alt']);
   return L;
 }
-const NEXT={backlog:['pendiente'],pendiente:['curso'],curso:['revision'],revision:['enviado','ajustes'],ajustes:['revision'],enviado:['completado','ajustes'],completado:[]};
+const NEXT={backlog:['pendiente'],pendiente:['curso'],curso:['revision','completado'],revision:['enviado','ajustes'],ajustes:['revision','completado'],enviado:['completado','ajustes'],completado:[]};
 function move(t,to,owner){
   if(!canEdit(t)&&!(canApprove(t)&&(to==='enviado'||to==='ajustes')))return 'Solo la persona responsable o Rocío pueden mover esta tarea.';
   const from=t.status,back=to==='ajustes';
   if(!(NEXT[from]||[]).includes(to))return 'Las tareas avanzan de a un paso. Toda pieza pasa por aprobación, y los ajustes vuelven a aprobación.';
   if(to==='pendiente'&&(!t.assignee||!t.due||!t.inicio))return 'Para pasar a Pendientes necesita responsable, fecha de inicio y de vencimiento.';
   if(to==='enviado'&&t.maker===me.id&&!admin())return 'La aprobación la hace otra persona del equipo, no quien la hizo.';
+  if(to==='completado'&&(from==='curso'||from==='ajustes')&&needsAprob(t))return 'Las piezas de diseño pasan por aprobación antes de cerrarse.';
   if(to==='completado'&&!t.link.trim())return 'Para cerrar la tarea falta el entregable: pegá el link de Drive en Entregable / archivo final.';
   if(from==='revision'&&to==='enviado'){t.approvedBy=me.id;notify(t.assignee,me.id,t.id,'aprobada','')}
   if(t.running&&!WORK.includes(to))stopRun(t);
